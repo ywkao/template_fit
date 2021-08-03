@@ -10,22 +10,31 @@
 #include "TFile.h"
 #include "TString.h"
 #include "THStack.h"
+#include "TList.h"
 #include <vector>
 using namespace RooFit;
  
+void setPad();
 void cosmetic_histogram(TH1D* h, TString xtitle);
-void makePad(THStack *hs, TH1D* h);
+void makeHist(THStack *hs, TH1D* h, TH1D* other, std::vector<double> v = {});
+void addHistograms(TH1D* h, TH1D* other);
 
 void template_fit()
 {
     // make stack plots {{{
-    TString path = "/afs/cern.ch/work/y/ykao/tPrimeExcessHgg/CMSSW_10_6_8/src/tprimetH";
-    TString input_file = path + "/shortcut_plots/plots_20210725/myhist_combine_RunII.root";
+    //TString path = "/afs/cern.ch/work/y/ykao/tPrimeExcessHgg/CMSSW_10_6_8/src/tprimetH";
+    //TString input_file = path + "/shortcut_plots/plots_20210725/myhist_combine_RunII.root";
+    TFile *fout = TFile::Open("output.root", "recreate");
+
+    TString input_file = "myhist_combine_RunII.root";
     TFile *fin = TFile::Open(input_file);
     std::vector<TString> backgrounds = {"QCD_GammaJets_imputed", "DiPhoton", "TTGG", "TTGJets", "TTJets", "VG"};
     std::vector<Int_t> colors = {kOrange+6, kRed+1, kGreen-2, kGreen-7, kSpring+10, kViolet-9};
     std::vector<TH1D*> vH_maxPhotonIDMVA_Bkg;
     std::vector<TH1D*> vH_minPhotonIDMVA_Bkg;
+
+    TH1D *h_maxPhotonIDMVA_others;
+    TH1D *h_minPhotonIDMVA_others;
 
     TH1D *h_maxPhotonIDMVA_Data = (TH1D*) fin->Get("hPhotonMaxIDMVA_fine_Data");
     TH1D *h_minPhotonIDMVA_Data = (TH1D*) fin->Get("hPhotonMinIDMVA_fine_Data");
@@ -49,149 +58,296 @@ void template_fit()
         hs_min -> Add(h_min);
 
         if(i>1) {
+            // exclude QCD and gamma gamma + jets
             h_maxPhotonIDMVA_subtracted -> Add(h_max, -1.0);
             h_minPhotonIDMVA_subtracted -> Add(h_min, -1.0);
+
+            if(i==backgrounds.size()-1) {
+                h_maxPhotonIDMVA_others = (TH1D*) h_max->Clone();
+                h_minPhotonIDMVA_others = (TH1D*) h_min->Clone();
+                //h_maxPhotonIDMVA_others = (TH1D*) fin->Get("hPhotonMaxIDMVA_fine_" + backgrounds[i]);
+                //h_minPhotonIDMVA_others = (TH1D*) fin->Get("hPhotonMinIDMVA_fine_" + backgrounds[i]);
+            } else {
+                addHistograms(h_maxPhotonIDMVA_others, h_max);
+                addHistograms(h_minPhotonIDMVA_others, h_min);
+            }
+
         } else {
             printf("%s: %f\n", backgrounds[i].Data(), h_max->Integral(0, h_max->GetSize()-1));
             printf("%s: %f\n", backgrounds[i].Data(), h_min->Integral(0, h_min->GetSize()-1));
+
+            if(i==0) {
+            printf("Others: %f\n", h_maxPhotonIDMVA_others->Integral(0, h_maxPhotonIDMVA_others->GetSize()-1));
+            printf("Others: %f\n", h_minPhotonIDMVA_others->Integral(0, h_minPhotonIDMVA_others->GetSize()-1));
+            printf("Data: %f\n", h_maxPhotonIDMVA_Data->Integral(0, h_maxPhotonIDMVA_Data->GetSize()-1));
+            printf("Data: %f\n", h_minPhotonIDMVA_Data->Integral(0, h_minPhotonIDMVA_Data->GetSize()-1));
+            }
         }
     }
+
+    TH1D *h_PhotonIDMVA_combine = new TH1D(*h_maxPhotonIDMVA_subtracted);
+    h_PhotonIDMVA_combine -> Add(h_minPhotonIDMVA_subtracted, 1.0);
 
     TCanvas *c1 = new TCanvas("c1", "", 1600, 600);
     c1->Divide(2);
     c1->cd(1);
-    makePad(hs_max, h_maxPhotonIDMVA_Data);
+    makeHist(hs_max, h_maxPhotonIDMVA_Data, h_maxPhotonIDMVA_others);
     c1->cd(2);
-    makePad(hs_min, h_minPhotonIDMVA_Data);
-    c1->SaveAs("eos_test/photonIDMVA.png");
+    makeHist(hs_min, h_minPhotonIDMVA_Data, h_minPhotonIDMVA_others);
+    c1->SaveAs("eos_test/photonIDMVA_before.png");
     //}}}
-    // observables, import data{{{
-    RooRealVar x("x","Photon ID MVA",-1.,1.);
+    // observables, create hist templates{{{
+    RooRealVar idmva("idmva","Photon ID MVA",-1.,1.);
     RooCategory channel("channel","channel");
     channel.defineType("maxIDMVA",1);
     channel.defineType("minIDMVA",2);
     
-    RooDataHist dh_max_data("dh_max_data", "dh_max_data", x, Import(*h_maxPhotonIDMVA_Data));
-    RooDataHist dh_min_data("dh_min_data", "dh_min_data", x, Import(*h_minPhotonIDMVA_Data));
-    RooDataHist dh_max_subtracted("dh_max_subtracted", "dh_max_subtracted", x, Import(*h_maxPhotonIDMVA_subtracted));
-    RooDataHist dh_min_subtracted("dh_min_subtracted", "dh_min_subtracted", x, Import(*h_minPhotonIDMVA_subtracted));
-    RooPlot *frame = x.frame(Title("Imported data of photon ID MVA"));
+    RooDataHist dh_max_data("dh_max_data", "dh_max_data", idmva, Import(*h_maxPhotonIDMVA_Data));
+    RooDataHist dh_min_data("dh_min_data", "dh_min_data", idmva, Import(*h_minPhotonIDMVA_Data));
+    RooDataHist dh_max_subtracted("dh_max_subtracted", "dh_max_subtracted", idmva, Import(*h_maxPhotonIDMVA_subtracted));
+    RooDataHist dh_min_subtracted("dh_min_subtracted", "dh_min_subtracted", idmva, Import(*h_minPhotonIDMVA_subtracted));
+    RooPlot *frame_max = idmva.frame(Title("Imported data of max photon ID MVA"));
+    RooPlot *frame_min = idmva.frame(Title("Imported data of min photon ID MVA"));
     
-    TCanvas *c3 = new TCanvas("c3","c3",1600,600);
-    c3->Divide(2);
-    c3->cd(1); dh_max_data.plotOn(frame_max); dh_max_subtracted.plotOn(frame_max, MarkerColor(kBlue)); frame_max->Draw();
-    c3->cd(2); dh_min_data.plotOn(frame_min); dh_min_subtracted.plotOn(frame_min, MarkerColor(kBlue)); frame_min->Draw();
-    c3->SaveAs("eos_test/imported_data.png");
+    c1->cd(1);
+	setPad();
+	dh_max_data.plotOn(frame_max);
+	dh_max_subtracted.plotOn(frame_max, MarkerColor(kBlue));
+	frame_max->Draw();
+    c1->cd(2);
+	setPad();
+	dh_min_data.plotOn(frame_min);
+	dh_min_subtracted.plotOn(frame_min, MarkerColor(kBlue));
+	frame_min->Draw();
+    c1->SaveAs("eos_test/imported_hist_data.png");
     //}}}
     // build models{{{
     // models for channel #1
-    RooDataHist dh_max_qcd("dh_max_qcd", "dh_max_qcd", x, Import(*vH_maxPhotonIDMVA_Bkg[0]));
-    RooDataHist dh_max_dip("dh_max_dip", "dh_max_dip", x, Import(*vH_maxPhotonIDMVA_Bkg[1]));
-    RooHistPdf pdf_max_qcd("pdf_max_qcd", "pdf_max_qcd", x, dh_max_qcd, 0);
-    RooHistPdf pdf_max_dip("pdf_max_dip", "pdf_max_dip", x, dh_max_dip, 0);
+    RooDataHist dh_max_qcd("dh_max_qcd", "dh_max_qcd", idmva, Import(*vH_maxPhotonIDMVA_Bkg[0]));
+    RooDataHist dh_max_dip("dh_max_dip", "dh_max_dip", idmva, Import(*vH_maxPhotonIDMVA_Bkg[1]));
+    RooDataHist dh_max_oth("dh_max_oth", "dh_max_oth", idmva, Import(*h_maxPhotonIDMVA_others));
+    RooHistPdf pdf_max_qcd("pdf_max_qcd", "pdf_max_qcd", idmva, dh_max_qcd, 0);
+    RooHistPdf pdf_max_dip("pdf_max_dip", "pdf_max_dip", idmva, dh_max_dip, 0);
+    RooHistPdf pdf_max_oth("pdf_max_oth", "pdf_max_oth", idmva, dh_max_oth, 0);
 
     // models for channel #2
-    RooDataHist dh_min_qcd("dh_min_qcd", "dh_min_qcd", x, Import(*vH_minPhotonIDMVA_Bkg[0]));
-    RooDataHist dh_min_dip("dh_min_dip", "dh_min_dip", x, Import(*vH_minPhotonIDMVA_Bkg[1]));
-    RooHistPdf pdf_min_qcd("pdf_min_qcd", "pdf_min_qcd", x, dh_min_qcd, 0);
-    RooHistPdf pdf_min_dip("pdf_min_dip", "pdf_min_dip", x, dh_min_dip, 0);
+    RooDataHist dh_min_qcd("dh_min_qcd", "dh_min_qcd", idmva, Import(*vH_minPhotonIDMVA_Bkg[0]));
+    RooDataHist dh_min_dip("dh_min_dip", "dh_min_dip", idmva, Import(*vH_minPhotonIDMVA_Bkg[1]));
+    RooDataHist dh_min_oth("dh_min_oth", "dh_min_oth", idmva, Import(*h_minPhotonIDMVA_others));
+    RooHistPdf pdf_min_qcd("pdf_min_qcd", "pdf_min_qcd", idmva, dh_min_qcd, 0);
+    RooHistPdf pdf_min_dip("pdf_min_dip", "pdf_min_dip", idmva, dh_min_dip, 0);
+    RooHistPdf pdf_min_oth("pdf_min_oth", "pdf_min_oth", idmva, dh_min_oth, 0);
 
     // key factors to extract
-    RooRealVar sf_qcd("sf_qcd","scale_factor",1.0,0.0,5.0);
-    RooRealVar sf_dip("sf_dip","scale_factor",1.0,0.0,5.0);
+    RooRealVar sf_qcd("sf_qcd","sf_qcd",1.06787,0.0,5.0);
+    RooRealVar sf_dip("sf_dip","sf_dip",1.38999,0.0,5.0);
+    RooRealVar sf_oth("sf_oth","sf_oth",1.0,0.0,5.00);
+
+    //sf_dip.setConstant(true);
+    sf_oth.setConstant(true);
 
     // norm = luminosity * acceptance * efficiency
+    RooRealVar data_norm("data_norm", "data norm", 188240);
     RooRealVar qcd_norm("qcd_norm","qcd norm",118526.56);
     RooRealVar dip_norm("dip_norm","dip norm",41626.71);
+    RooRealVar oth_norm("oth_norm","oth norm",3806.89);
+
+    //RooRealVar qcd_norm("qcd_norm","qcd norm",100);
+    //RooRealVar dip_norm("dip_norm","dip norm",100);
+    //RooRealVar oth_norm("oth_norm","oth norm",100);
     
-    RooProduct yield_qcd("ch1_nqcd","ch1 qcd yields", RooArgList(sf_qcd,qcd_norm));
-    RooProduct yield_dip("ch1_ndip","ch1 dip yields", RooArgList(sf_dip,dip_norm));
+    RooProduct yield_qcd("nqcd","qcd yields", RooArgList(sf_qcd,qcd_norm));
+    RooProduct yield_dip("ndip","dip yields", RooArgList(sf_dip,dip_norm));
+    RooProduct yield_oth("noth","oth yields", RooArgList(sf_oth,oth_norm));
 
-    RooAddPdf ch1_model("ch1_model","decay1 model",
-                        RooArgList(pdf_max_qcd,pdf_max_dip),RooArgList(yield_qcd, yield_dip));
-    RooAddPdf ch2_model("ch2_model","decay2 model",
-                        RooArgList(pdf_min_qcd,pdf_min_dip),RooArgList(yield_qcd, yield_dip));
+    RooAddPdf ch1_model("ch1_model","ch1 model",
+                        RooArgList(pdf_max_qcd,pdf_max_dip,pdf_max_oth),RooArgList(yield_qcd,yield_dip,yield_oth));
+    RooAddPdf ch2_model("ch2_model","ch2 model",
+                        RooArgList(pdf_min_qcd,pdf_min_dip,pdf_min_oth),RooArgList(yield_qcd,yield_dip,yield_oth));
     //}}}
+    // import data from TTree{{{
+    TString input_tree = "MVABaby_Data_simultaneousFit.root";
+    TFile *ftree = TFile::Open(input_tree);
+    TTree *t_max = (TTree*) ftree->Get("t_maxPhotonIDMVA");
+    TTree *t_min = (TTree*) ftree->Get("t_minPhotonIDMVA");
 
-    /*
-    // skip {{{
-    // now build the simultaneous model by adding two channels
+    fout->cd(); // to prevent write buffer error
+    idmva.setBins(30);
+
+    RooDataSet data_max("data_max", "data_max", t_max, idmva);
+    RooDataSet data_min("data_min", "data_min", t_min, idmva);
+
+    RooPlot *frame_data_max = idmva.frame(Title("max Unbinned data shown in default frame binning"));
+    RooPlot *frame_data_min = idmva.frame(Title("min Unbinned data shown in default frame binning"));
+    
+    c1->cd(1); setPad(); data_max.plotOn(frame_data_max); frame_data_max->Draw();
+    c1->cd(2); setPad(); data_min.plotOn(frame_data_min); frame_data_min->Draw();
+    c1->SaveAs("eos_test/imported_tree_data.png");
+    //}}}
+    // now build the simultaneous model by adding two channels {{{
     RooSimultaneous model("model","model",channel);
     model.addPdf(ch1_model,"maxIDMVA");
     model.addPdf(ch2_model,"minIDMVA");
     
     // joint two data sets, fit together
-    RooDataHist data("data","joint data",x,Index(channel),
-                    Import("maxIDMVA",dh_max_subtracted),Import("minIDMVA",dh_min_subtracted));
+    RooDataSet data("data","joint data",idmva,Index(channel),
+                    Import("maxIDMVA",data_max),Import("minIDMVA",data_min));
+
     model.fitTo(data,Minos(true));
+    printf("[result] sf_qcd = %f, sf_dip = %f\n", sf_qcd.getVal(), sf_dip.getVal());
     
     TCanvas *c2 = new TCanvas("c2","c2",1600,600);
     c2->Divide(2);
 
     c2->cd(1); // channel1 only
-    RooPlot* frame2 = x.frame();
-    //data.plotOn(frame2,Cut("channel==1"));
-    dh_max_subtracted.plotOn(frame2);
+    gPad->SetGrid();
+    gPad->SetTicks();
+    RooPlot* frame2 = idmva.frame();
+    data.plotOn(frame2,Cut("channel==1"));
     model.plotOn(frame2,Slice(channel,"maxIDMVA"),ProjWData(channel,data));
     pdf_max_qcd.plotOn(frame2, LineColor(colors[0]));
     pdf_max_dip.plotOn(frame2, LineColor(colors[1]));
+    pdf_max_oth.plotOn(frame2, LineColor(colors[2]));
     frame2->Draw();
 
     c2->cd(2); // chaneel2 only
-    RooPlot* frame3 = y.frame();
-    //data.plotOn(frame3,Cut("channel==2"));
-    dh_min_subtracted.plotOn(frame3);
+    gPad->SetGrid();
+    gPad->SetTicks();
+    RooPlot* frame3 = idmva.frame();
+    data.plotOn(frame3,Cut("channel==2"));
     model.plotOn(frame3,Slice(channel,"minIDMVA"),ProjWData(channel,data));
     pdf_min_qcd.plotOn(frame3, LineColor(colors[0]));
     pdf_min_dip.plotOn(frame3, LineColor(colors[1]));
+    pdf_min_oth.plotOn(frame3, LineColor(colors[2]));
     frame3->Draw();
 
-    //c2->cd(3); // sum of the two channels
-    //RooPlot* frame1 = x.frame();
-    //data.plotOn(frame1);
-    //model.plotOn(frame1,ProjWData(channel,data));
-    //frame1->Draw();
-    
     c2->SaveAs("eos_test/test.png");
     //}}}
-    // observables, import data{{{
-    RooRealVar x("x","Max photon ID MVA",-1.,1.);
-    RooRealVar y("y","Min photon ID MVA",-1.,1.);
-    RooCategory channel("channel","channel");
-    channel.defineType("maxIDMVA",1);
-    channel.defineType("minIDMVA",2);
     
-    RooDataHist dh_max_data("dh_max_data", "dh_max_data", x, Import(*h_maxPhotonIDMVA_Data));
-    RooDataHist dh_min_data("dh_min_data", "dh_min_data", y, Import(*h_minPhotonIDMVA_Data));
-    RooDataHist dh_max_subtracted("dh_max_subtracted", "dh_max_subtracted", x, Import(*h_maxPhotonIDMVA_subtracted));
-    RooDataHist dh_min_subtracted("dh_min_subtracted", "dh_min_subtracted", y, Import(*h_minPhotonIDMVA_subtracted));
-    RooPlot *frame_max = x.frame(Title("Imported data of max photon ID MVA"));
-    RooPlot *frame_min = y.frame(Title("Imported data of min photon ID MVA"));
+    // modify stack plots
+    std::vector<double> v_sfs;
+    v_sfs = {1.06787, 1.38999};
+    v_sfs = {sf_qcd.getVal(), sf_dip.getVal()};
+
+    THStack *hs_max_updated = new THStack("hs_max_updated", "");
+    THStack *hs_min_updated = new THStack("hs_min_updated", "");
+    for(int i=0; i<backgrounds.size(); ++i)
+    {
+        if(i+2==backgrounds.size()) {
+            vH_maxPhotonIDMVA_Bkg[i]->Scale(v_sfs[1]);
+            vH_minPhotonIDMVA_Bkg[i]->Scale(v_sfs[1]);
+        }
+        if(i+1==backgrounds.size()) {
+            vH_maxPhotonIDMVA_Bkg[i]->Scale(v_sfs[0]);
+            vH_minPhotonIDMVA_Bkg[i]->Scale(v_sfs[0]);
+        }
+        hs_max_updated -> Add(vH_maxPhotonIDMVA_Bkg[i]);
+        hs_min_updated -> Add(vH_minPhotonIDMVA_Bkg[i]);
+    }
+
+    c1->cd(1);
+    makeHist(hs_max_updated, h_maxPhotonIDMVA_Data, h_maxPhotonIDMVA_others);
+    c1->cd(2);
+    makeHist(hs_min_updated, h_minPhotonIDMVA_Data, h_minPhotonIDMVA_others);
+    c1->SaveAs("eos_test/photonIDMVA_after.png");
+
+    fout->Close();
+    // skip {{{
+    /*
+    //----------------------------------------------------------------------------------------------------
+
+    TString input_tree = "MVABaby_combine_RunII.root";
+    TFile *ftree = TFile::Open(input_tree);
+    TTree *t = (TTree*) ftree->Get("t");
+
+    RooRealVar maxIDMVA("maxIDMVA", "maxIDMVA", -1, 1);
+    RooRealVar minIDMVA("minIDMVA", "minIDMVA", -1, 1);
+    //RooDataSet data_max("data_max", "data_max", t, maxIDMVA);
+    //RooDataSet data_min("data_min", "data_min", t, minIDMVA);
+
+    RooPlot *frame_data_max = maxIDMVA.frame(Title("max Unbinned data shown in default frame binning"));
+    RooPlot *frame_data_min = minIDMVA.frame(Title("min Unbinned data shown in default frame binning"));
     
-    TCanvas *c3 = new TCanvas("c3","c3",1600,600);
-    c3->Divide(2);
-    c3->cd(1); dh_max_data.plotOn(frame_max); dh_max_subtracted.plotOn(frame_max, MarkerColor(kBlue)); frame_max->Draw();
-    c3->cd(2); dh_min_data.plotOn(frame_min); dh_min_subtracted.plotOn(frame_min, MarkerColor(kBlue)); frame_min->Draw();
-    c3->SaveAs("eos_test/imported_data.png");
-    //}}}
+    TCanvas *c4 = new TCanvas("c4","c4",1600,600);
+    c4->Divide(2);
+    //c4->cd(1); setPad(); data_max.plotOn(frame_data_max); frame_data_max->Draw();
+    //c4->cd(2); setPad(); data_min.plotOn(frame_data_min); frame_data_min->Draw();
+    c4->cd(1); setPad(); t->Draw("maxIDMVA>>hmax(30, -1., 1.)", "process_id==10", "ep");
+    c4->cd(2); setPad(); t->Draw("minIDMVA>>hmin(30, -1., 1.)", "process_id==10", "ep");
+    TH1D *hmax = (TH1D*) gDirectory->Get("hmax");
+    TH1D *hmin = (TH1D*) gDirectory->Get("hmin");
+    cosmetic_histogram(hmax, "Max Photon ID MVA");
+    cosmetic_histogram(hmin, "Min Photon ID MVA");
+
+    c4->SaveAs("eos_test/test.png");
+
+    //----------------------------------------------------------------------------------------------------
     */
+    //}}}
 }
 
-void cosmetic_histogram(TH1D* h, TString xtitle)
+void setPad() //{{{
+{
+    gPad->SetGrid();
+    gPad->SetTicks();
+} //}}}
+void cosmetic_histogram(TH1D* h, TString xtitle) //{{{
 {
     h -> SetStats(0);
     h -> SetMarkerStyle(20);
     h -> SetMinimum(0);
     h -> GetXaxis() -> SetTitle(xtitle.Data());
     //h -> SetMaximum(1e+5);
-    //h -> SetMinimum(1e-2);
-}
-
-void makePad(THStack *hs, TH1D* h)
+    //h -> SetMinimum(1e-1);
+} //}}}
+void makeHist(THStack *hs, TH1D* h, TH1D* other, std::vector<double> v = {}) //{{{
 {
     //gPad->SetLogy(1);
-    gPad->SetGrid();
+    setPad();
     h->Draw("ep1");
+
     hs->Draw("hist, same");
-    h->Draw("same, ep1");
+    h->Draw("ep1, same");
+
+    if(v.size() > 0)
+    {
+        int counter = 0;
+        printf(">>> do the follows\n");
+
+        TList* mylist = hs->GetHists();
+        for(const auto&& obj: *mylist)
+        {
+            TH1D* h_ele = (TH1D*) obj;
+            TString name = obj->GetName();
+
+            if(name.Contains("QCD")) {
+                h_ele->Scale(v[0]);
+                printf("check: %d, %s, %f\n", counter, obj->GetName(), v[0]);
+            }
+
+            if(name.Contains("DiPhoton")) {
+                h_ele->Scale(v[1]);
+                printf("check: %d, %s, %f\n", counter, obj->GetName(), v[1]);
+            }
+                
+            counter += 1;
+        }
+        
+        gPad->Modified();
+        gPad->Update();
+        hs->Draw("hist, same");
+        h->Draw("ep1, same");
+    }
+
+    //other->SetFillColor(kBlue);
+    //other->Draw("hist, same");
+} //}}}
+void addHistograms(TH1D* h, TH1D* other) //{{{
+{
+    int bins = h->GetSize();
+    for(int i=0; i<bins; ++i)
+    {
+        double content = h->GetBinContent(i) + other->GetBinContent(i);
+        h->SetBinContent(i, content);
+    }
 }
