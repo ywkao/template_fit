@@ -123,20 +123,34 @@ void template_fit()
     //}}}
     // build models{{{
     // models for channel #1
-    RooDataHist dh_max_qcd("dh_max_qcd", "dh_max_qcd", idmva, Import(*vH_maxPhotonIDMVA_Bkg[0]));
-    RooDataHist dh_max_dip("dh_max_dip", "dh_max_dip", idmva, Import(*vH_maxPhotonIDMVA_Bkg[1]));
+    RooDataHist dh_max_qcd("dh_max_qcd", "dh_max_qcd", idmva, Import(*vH_maxPhotonIDMVA_Bkg[5]));
+    RooDataHist dh_max_dip("dh_max_dip", "dh_max_dip", idmva, Import(*vH_maxPhotonIDMVA_Bkg[4]));
     RooDataHist dh_max_oth("dh_max_oth", "dh_max_oth", idmva, Import(*h_maxPhotonIDMVA_others));
     RooHistPdf pdf_max_qcd("pdf_max_qcd", "pdf_max_qcd", idmva, dh_max_qcd, 0);
     RooHistPdf pdf_max_dip("pdf_max_dip", "pdf_max_dip", idmva, dh_max_dip, 0);
     RooHistPdf pdf_max_oth("pdf_max_oth", "pdf_max_oth", idmva, dh_max_oth, 0);
 
     // models for channel #2
-    RooDataHist dh_min_qcd("dh_min_qcd", "dh_min_qcd", idmva, Import(*vH_minPhotonIDMVA_Bkg[0]));
-    RooDataHist dh_min_dip("dh_min_dip", "dh_min_dip", idmva, Import(*vH_minPhotonIDMVA_Bkg[1]));
+    RooDataHist dh_min_qcd("dh_min_qcd", "dh_min_qcd", idmva, Import(*vH_minPhotonIDMVA_Bkg[5]));
+    RooDataHist dh_min_dip("dh_min_dip", "dh_min_dip", idmva, Import(*vH_minPhotonIDMVA_Bkg[4]));
     RooDataHist dh_min_oth("dh_min_oth", "dh_min_oth", idmva, Import(*h_minPhotonIDMVA_others));
     RooHistPdf pdf_min_qcd("pdf_min_qcd", "pdf_min_qcd", idmva, dh_min_qcd, 0);
     RooHistPdf pdf_min_dip("pdf_min_dip", "pdf_min_dip", idmva, dh_min_dip, 0);
     RooHistPdf pdf_min_oth("pdf_min_oth", "pdf_min_oth", idmva, dh_min_oth, 0);
+
+    //RooPlot *frame = idmva.frame(Title("Check pdf of min photon IDMVA"));
+    //c1->cd(1);
+	//setPad();
+    //vH_minPhotonIDMVA_Bkg[5]->Draw("hist");
+    //vH_minPhotonIDMVA_Bkg[4]->Draw("hist,same");
+    //h_minPhotonIDMVA_others->Draw("hist,same");
+    //c1->cd(2);
+	//setPad();
+	//dh_min_qcd.plotOn(frame);
+	//dh_min_dip.plotOn(frame);
+	//dh_min_oth.plotOn(frame);
+	//frame->Draw();
+    //c1->SaveAs("eos_test/test.png");
 
     // key factors to extract
     RooRealVar sf_qcd("sf_qcd","sf_qcd",1.06787,0.0,5.0);
@@ -152,10 +166,6 @@ void template_fit()
     RooRealVar dip_norm("dip_norm","dip norm",41626.71);
     RooRealVar oth_norm("oth_norm","oth norm",3806.89);
 
-    //RooRealVar qcd_norm("qcd_norm","qcd norm",100);
-    //RooRealVar dip_norm("dip_norm","dip norm",100);
-    //RooRealVar oth_norm("oth_norm","oth norm",100);
-    
     RooProduct yield_qcd("nqcd","qcd yields", RooArgList(sf_qcd,qcd_norm));
     RooProduct yield_dip("ndip","dip yields", RooArgList(sf_dip,dip_norm));
     RooProduct yield_oth("noth","oth yields", RooArgList(sf_oth,oth_norm));
@@ -184,7 +194,7 @@ void template_fit()
     c1->cd(2); setPad(); data_min.plotOn(frame_data_min); frame_data_min->Draw();
     c1->SaveAs("eos_test/imported_tree_data.png");
     //}}}
-    // now build the simultaneous model by adding two channels {{{
+    // now build the simultaneous model by adding two channels
     RooSimultaneous model("model","model",channel);
     model.addPdf(ch1_model,"maxIDMVA");
     model.addPdf(ch2_model,"minIDMVA");
@@ -196,6 +206,7 @@ void template_fit()
     model.fitTo(data,Minos(true));
     printf("[result] sf_qcd = %f, sf_dip = %f\n", sf_qcd.getVal(), sf_dip.getVal());
     
+    // check pdfs on plots {{{
     TCanvas *c2 = new TCanvas("c2","c2",1600,600);
     c2->Divide(2);
 
@@ -223,10 +234,8 @@ void template_fit()
 
     c2->SaveAs("eos_test/test.png");
     //}}}
-    
-    // modify stack plots
+    // check stack plots {{{
     std::vector<double> v_sfs;
-    v_sfs = {1.06787, 1.38999};
     v_sfs = {sf_qcd.getVal(), sf_dip.getVal()};
 
     THStack *hs_max_updated = new THStack("hs_max_updated", "");
@@ -252,37 +261,6 @@ void template_fit()
     c1->SaveAs("eos_test/photonIDMVA_after.png");
 
     fout->Close();
-    // skip {{{
-    /*
-    //----------------------------------------------------------------------------------------------------
-
-    TString input_tree = "MVABaby_combine_RunII.root";
-    TFile *ftree = TFile::Open(input_tree);
-    TTree *t = (TTree*) ftree->Get("t");
-
-    RooRealVar maxIDMVA("maxIDMVA", "maxIDMVA", -1, 1);
-    RooRealVar minIDMVA("minIDMVA", "minIDMVA", -1, 1);
-    //RooDataSet data_max("data_max", "data_max", t, maxIDMVA);
-    //RooDataSet data_min("data_min", "data_min", t, minIDMVA);
-
-    RooPlot *frame_data_max = maxIDMVA.frame(Title("max Unbinned data shown in default frame binning"));
-    RooPlot *frame_data_min = minIDMVA.frame(Title("min Unbinned data shown in default frame binning"));
-    
-    TCanvas *c4 = new TCanvas("c4","c4",1600,600);
-    c4->Divide(2);
-    //c4->cd(1); setPad(); data_max.plotOn(frame_data_max); frame_data_max->Draw();
-    //c4->cd(2); setPad(); data_min.plotOn(frame_data_min); frame_data_min->Draw();
-    c4->cd(1); setPad(); t->Draw("maxIDMVA>>hmax(30, -1., 1.)", "process_id==10", "ep");
-    c4->cd(2); setPad(); t->Draw("minIDMVA>>hmin(30, -1., 1.)", "process_id==10", "ep");
-    TH1D *hmax = (TH1D*) gDirectory->Get("hmax");
-    TH1D *hmin = (TH1D*) gDirectory->Get("hmin");
-    cosmetic_histogram(hmax, "Max Photon ID MVA");
-    cosmetic_histogram(hmin, "Min Photon ID MVA");
-
-    c4->SaveAs("eos_test/test.png");
-
-    //----------------------------------------------------------------------------------------------------
-    */
     //}}}
 }
 
