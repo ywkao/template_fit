@@ -21,12 +21,16 @@ void addHistograms(TH1D* h, TH1D* other);
 
 void template_fit()
 {
+    TString input_file = "./rootfiles/myhist_combine_RunII.root";
+    TString input_tree = "./rootfiles/MVABaby_Data_simultaneousFit.root";
+    //TString input_file = "./rootfiles/myhist_low_photon_sideband.root";
+    //TString input_tree = "./rootfiles/MVABaby_low_photon_sideband_Data.root";
+    
     // make stack plots {{{
     //TString path = "/afs/cern.ch/work/y/ykao/tPrimeExcessHgg/CMSSW_10_6_8/src/tprimetH";
     //TString input_file = path + "/shortcut_plots/plots_20210725/myhist_combine_RunII.root";
     TFile *fout = TFile::Open("output.root", "recreate");
 
-    TString input_file = "myhist_combine_RunII.root";
     TFile *fin = TFile::Open(input_file);
     std::vector<TString> backgrounds = {"QCD_GammaJets_imputed", "DiPhoton", "TTGG", "TTGJets", "TTJets", "VG"};
     std::vector<Int_t> colors = {kOrange+6, kRed+1, kGreen-2, kGreen-7, kSpring+10, kViolet-9};
@@ -43,6 +47,11 @@ void template_fit()
 
     TH1D *h_maxPhotonIDMVA_subtracted = new TH1D(*h_maxPhotonIDMVA_Data);
     TH1D *h_minPhotonIDMVA_subtracted = new TH1D(*h_minPhotonIDMVA_Data);
+
+    double yh_data = 1000;
+    double yh_qcd = 1000;
+    double yh_dip = 1000;
+    double yh_oth = 1000;
 
     THStack *hs_max = new THStack("hs_max", "");
     THStack *hs_min = new THStack("hs_min", "");
@@ -76,11 +85,18 @@ void template_fit()
             printf("%s: %f\n", backgrounds[i].Data(), h_max->Integral(0, h_max->GetSize()-1));
             printf("%s: %f\n", backgrounds[i].Data(), h_min->Integral(0, h_min->GetSize()-1));
 
+            if(i==1)
+                yh_dip = h_max->Integral(0, h_max->GetSize()-1);
+
             if(i==0) {
-            printf("Others: %f\n", h_maxPhotonIDMVA_others->Integral(0, h_maxPhotonIDMVA_others->GetSize()-1));
-            printf("Others: %f\n", h_minPhotonIDMVA_others->Integral(0, h_minPhotonIDMVA_others->GetSize()-1));
-            printf("Data: %f\n", h_maxPhotonIDMVA_Data->Integral(0, h_maxPhotonIDMVA_Data->GetSize()-1));
-            printf("Data: %f\n", h_minPhotonIDMVA_Data->Integral(0, h_minPhotonIDMVA_Data->GetSize()-1));
+                yh_qcd = h_max->Integral(0, h_max->GetSize()-1);
+                yh_oth = h_maxPhotonIDMVA_others->Integral(0, h_maxPhotonIDMVA_others->GetSize()-1);
+                yh_data = h_maxPhotonIDMVA_Data->Integral(0, h_maxPhotonIDMVA_Data->GetSize()-1);
+
+                printf("Others: %f\n", h_maxPhotonIDMVA_others->Integral(0, h_maxPhotonIDMVA_others->GetSize()-1));
+                printf("Others: %f\n", h_minPhotonIDMVA_others->Integral(0, h_minPhotonIDMVA_others->GetSize()-1));
+                printf("Data: %f\n", h_maxPhotonIDMVA_Data->Integral(0, h_maxPhotonIDMVA_Data->GetSize()-1));
+                printf("Data: %f\n", h_minPhotonIDMVA_Data->Integral(0, h_minPhotonIDMVA_Data->GetSize()-1));
             }
         }
     }
@@ -161,10 +177,14 @@ void template_fit()
     sf_oth.setConstant(true);
 
     // norm = luminosity * acceptance * efficiency
-    RooRealVar data_norm("data_norm", "data norm", 188240);
-    RooRealVar qcd_norm("qcd_norm","qcd norm",118526.56);
-    RooRealVar dip_norm("dip_norm","dip norm",41626.71);
-    RooRealVar oth_norm("oth_norm","oth norm",3806.89);
+    //RooRealVar data_norm("data_norm", "data norm", 188240);
+    //RooRealVar qcd_norm("qcd_norm","qcd norm",118526.56);
+    //RooRealVar dip_norm("dip_norm","dip norm",41626.71);
+    //RooRealVar oth_norm("oth_norm","oth norm",3806.89);
+    RooRealVar data_norm("data_norm", "data norm", yh_data);
+    RooRealVar qcd_norm("qcd_norm","qcd norm", yh_qcd);
+    RooRealVar dip_norm("dip_norm","dip norm", yh_dip);
+    RooRealVar oth_norm("oth_norm","oth norm", yh_oth);
 
     RooProduct yield_qcd("nqcd","qcd yields", RooArgList(sf_qcd,qcd_norm));
     RooProduct yield_dip("ndip","dip yields", RooArgList(sf_dip,dip_norm));
@@ -176,7 +196,6 @@ void template_fit()
                         RooArgList(pdf_min_qcd,pdf_min_dip,pdf_min_oth),RooArgList(yield_qcd,yield_dip,yield_oth));
     //}}}
     // import data from TTree{{{
-    TString input_tree = "MVABaby_Data_simultaneousFit.root";
     TFile *ftree = TFile::Open(input_tree);
     TTree *t_max = (TTree*) ftree->Get("t_maxPhotonIDMVA");
     TTree *t_min = (TTree*) ftree->Get("t_minPhotonIDMVA");
@@ -204,7 +223,15 @@ void template_fit()
                     Import("maxIDMVA",data_max),Import("minIDMVA",data_min));
 
     model.fitTo(data,Minos(true));
+
+    printf("[init] yh_data = %.2f, yh_nrb = %.2f, ", yh_data, yh_qcd + yh_dip + yh_oth);
+    printf("yh_qcd = %.2f, yh_dip = %.2f, yh_oth = %.2f\n", yh_qcd, yh_dip, yh_oth);
+
     printf("[result] sf_qcd = %f, sf_dip = %f\n", sf_qcd.getVal(), sf_dip.getVal());
+
+    yh_qcd *= sf_qcd.getVal(); yh_dip *= sf_dip.getVal();
+    printf("[result] yh_data = %.2f, yh_nrb = %.2f, ", yh_data, yh_qcd + yh_dip + yh_oth);
+    printf("yh_qcd = %.2f, yh_dip = %.2f, yh_oth = %.2f\n", yh_qcd, yh_dip, yh_oth);
     
     // check pdfs on plots {{{
     TCanvas *c2 = new TCanvas("c2","c2",1600,600);

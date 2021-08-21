@@ -8,7 +8,6 @@ ROOT.gROOT.SetBatch(True)
 #----------------------------------------------------------------------------------------------------#
 # global variables
 #----------------------------------------------------------------------------------------------------#
-filename = "fakePhoton_GJet.root"
 directory = "/eos/user/y/ykao/www/tprimetH_THQHadronic/test_01/"
 directory = "/eos/user/y/ykao/www/tprimetH_THQHadronic/test/"
 
@@ -27,14 +26,16 @@ def create_directory(dir_output):
     subprocess.call( "cp -p %s %s" % (php_index, dir_output), shell=True)
 
 def update_to_my_webpage(myfigure):
-    subprocess.call("cp -p %s %s" % (myfigure, directory), shell = True)
+    subprocess.call("mv %s %s" % (myfigure, directory), shell = True)
 
 #----------------------------------------------------------------------------------------------------
 # retrieve fake photon IDMVA
 #----------------------------------------------------------------------------------------------------#
 def make_fake_photon_IDMVA(var, output, do_fit = False):
+    filename = "fakePhoton_GJet.root"
+    filename = "fakePhoton_pdf.root"
     f1 = ROOT.TFile.Open(filename, "R")
-    tree = f1.Get("t")
+    tree = f1.Get("t_fakePhotonIDMVA")
 
     hist = ROOT.TH1D("hist", ";Photon ID MVA; Entries", 40, -1, 1)
     tree.Draw("%s >> hist" % var)
@@ -47,12 +48,104 @@ def make_fake_photon_IDMVA(var, output, do_fit = False):
     c1.SaveAs(output)
     update_to_my_webpage(output)
 
+def check_fake_pdf(output):
+    f_IDMVA_fcnc = ROOT.TF1("f_IDMVA", "[0] + [1]*x + [2]*x^2 + [3]*x^3 + [4]*x^4 + [5]*x^5 + [6]*x^6 + [7]*x^7", -1.0, 1.0)
+    f_IDMVA_fcnc.SetParameter(0, 8818.17)
+    f_IDMVA_fcnc.SetParameter(1, -12755.5)
+    f_IDMVA_fcnc.SetParameter(2, 26130)
+    f_IDMVA_fcnc.SetParameter(3, -26664.9)
+    f_IDMVA_fcnc.SetParameter(4, -54741.1)
+    f_IDMVA_fcnc.SetParameter(5, 76558)
+    f_IDMVA_fcnc.SetParameter(6, 112245)
+    f_IDMVA_fcnc.SetParameter(7, -123913)
+    f_IDMVA_fcnc.SetLineColor(ROOT.kBlue)
+    f_IDMVA_fcnc.SetNormalized(True)
+    f_IDMVA_fcnc.Draw()
+
+    f_IDMVA = ROOT.TF1("f_IDMVA", "[0] + [1]*x + [2]*x^2 + [3]*x^3 + [4]*x^4 + [5]*x^5 + [6]*x^6 + [7]*x^7", -1.0, 1.0)
+    f_IDMVA.SetParameter(0, 435.477);
+    f_IDMVA.SetParameter(1, -487.523);
+    f_IDMVA.SetParameter(2, 1064.27);
+    f_IDMVA.SetParameter(3, -1215.24);
+    f_IDMVA.SetParameter(4, -1752.79);
+    f_IDMVA.SetParameter(5, 3047.33);
+    f_IDMVA.SetParameter(6, 3370.99);
+    f_IDMVA.SetParameter(7, -4173.07);
+    f_IDMVA.SetLineColor(ROOT.kRed)
+    f_IDMVA.SetNormalized(True)
+    f_IDMVA.Draw("same")
+
+    c1.SaveAs(output)
+    update_to_my_webpage(output)
+
+colors = {
+    "QCD"       : ROOT.kOrange + 6,
+    "GammaJets" : ROOT.kRed + 3,
+    "DiPhoton"  : ROOT.kRed + 1,
+    "TTGG"      : ROOT.kGreen-2,
+    "TTGJets"   : ROOT.kGreen-7,
+    "TTJets"    : ROOT.kSpring+10,
+    "VG"        : ROOT.kViolet-9,
+}
+
+def check_low_photon_ID_region(name, r):
+    output = "hist_low_photon_Id_study_%s_2016.png" % name
+
+    samples = ["QCD_GammaJets_imputed", "QCD", "GammaJets", "DiPhoton", "TTGG", "TTGJets", "TTJets", "VG"]
+    samples = ["Data", "QCD", "GammaJets", "DiPhoton", "TTGG", "TTGJets", "TTJets", "VG"]
+    samples = ["QCD_GammaJets_imputed", "QCD", "GammaJets"] # imputed, process_id_ = 18
+    samples = ["Data", "QCD", "GammaJets", "DiPhoton"]
+    #samples = ["Data", "VG", "TTJets", "TTGJets", "TTGG", "DiPhoton", "GammaJets", "QCD"]
+
+    tail = "Year_0" # 2016
+    tail = ""
+
+    filename = "fakePhoton_study.root"
+    filename = "myhist_combine_2016.root"
+    #filename = "lowPhotonIdRegion_study.root"
+    f1 = ROOT.TFile.Open(filename, "R")
+    hs = ROOT.THStack("hs", ";M_{#gamma#gamma}GeV;Yields");
+    hists = {} 
+    for process in samples:
+        histname = name + "_" + process + tail
+        h = f1.Get(histname)
+
+        print histname, h.Integral(0, h.GetSize()-1)
+
+        if process == "QCD_GammaJets_imputed":
+            process = "Data"
+
+        if process == "Data": 
+            h.SetMarkerStyle(20)
+        else:
+            h.SetFillColor(colors[process])
+            hs.Add(h)
+
+        hists[process] = h
+
+    hists["Data"].Draw("ep")
+    hs.Draw("hist,same")
+
+    hists["Data"].GetXaxis().SetRangeUser(r[0], r[1])
+    hs.GetHistogram().GetXaxis().SetRangeUser(r[0], r[1])
+
+    c1.SaveAs(output)
+    update_to_my_webpage(output)
+
 #----------------------------------------------------------------------------------------------------#
 # Execution
 #----------------------------------------------------------------------------------------------------#
 if __name__ == "__main__":
-    clear_directory(directory)
+    #clear_directory(directory)
     create_directory(directory)
-    make_fake_photon_IDMVA("fake_photon_IDMVA", "check_fake_photon_IDMVA_GammaJets.png", True)
-    make_fake_photon_IDMVA("maxIDMVA_", "check_max_photon_IDMVA_GammaJets.png")
-    make_fake_photon_IDMVA("minIDMVA_", "check_min_photon_IDMVA_GammaJets.png")
+
+    check_low_photon_ID_region("hMass", [100,180])
+    check_low_photon_ID_region("hPhotonMinIDMVA_fine", [-0.9,1.0])
+    check_low_photon_ID_region("hPhotonMaxIDMVA_fine", [-0.9,1.0])
+    #check_low_photon_ID_region("hfake_photon_IDMVA", [-0.9,1.0])
+
+    #check_fake_pdf("check_fake_pdf.png")
+
+    #make_fake_photon_IDMVA("idmva", "check_fake_photon_IDMVA_GammaJets.png", True)
+    #make_fake_photon_IDMVA("maxIDMVA_", "check_max_photon_IDMVA_GammaJets.png")
+    #make_fake_photon_IDMVA("minIDMVA_", "check_min_photon_IDMVA_GammaJets.png")
