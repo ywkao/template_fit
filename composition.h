@@ -26,19 +26,21 @@ void cosmetic_histogram(TH1D* h, TString xtitle) //{{{
 {
     h -> SetStats(0);
     h -> SetMarkerStyle(20);
-    h -> SetMinimum(0);
     h -> GetXaxis() -> SetTitle(xtitle.Data());
-    //h -> SetMaximum(1e+5);
-    //h -> SetMinimum(1e-1);
+
+    //h -> SetMinimum(0);
+    h -> SetMaximum(1e+5);
+    h -> SetMinimum(1e-1);
 } //}}}
 void makeHist(THStack *hs, TH1D* h, std::vector<double> v = {}) //{{{
 {
-    //gPad->SetLogy(1);
     setPad();
     h->Draw("ep1");
 
     hs->Draw("hist, same");
     h->Draw("ep1, same");
+
+    gPad->SetLogy(1);
 
     if(v.size() > 0)
     {

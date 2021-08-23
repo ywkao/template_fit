@@ -64,6 +64,7 @@ void composition_lowPhotonIdRegion()
     make_stacks(hs_min, vH_minPhotonIDMVA_Bkg, h_minPhotonIDMVA_others);
 
     TCanvas *c1 = new TCanvas("c1", "", 1600, 600);
+    c1->SetLogy();
 
     c1->Divide(2);
     c1->cd(1);

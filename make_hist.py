@@ -32,8 +32,10 @@ def update_to_my_webpage(myfigure):
 # retrieve fake photon IDMVA
 #----------------------------------------------------------------------------------------------------#
 def make_fake_photon_IDMVA(var, output, do_fit = False):
-    filename = "fakePhoton_GJet.root"
-    filename = "fakePhoton_pdf.root"
+    filename = "rootfiles/fakePhoton_GJet.root"
+    filename = "rootfiles/fakePhoton_pdf.root"
+    filename = "rootfiles/fakePhoton_pdf_GJet.root"
+    filename = "rootfiles/fakePhoton_pdf_v3p8.root"
     f1 = ROOT.TFile.Open(filename, "R")
     tree = f1.Get("t_fakePhotonIDMVA")
 
@@ -139,13 +141,15 @@ if __name__ == "__main__":
     #clear_directory(directory)
     create_directory(directory)
 
-    check_low_photon_ID_region("hMass", [100,180])
-    check_low_photon_ID_region("hPhotonMinIDMVA_fine", [-0.9,1.0])
-    check_low_photon_ID_region("hPhotonMaxIDMVA_fine", [-0.9,1.0])
+    #check_low_photon_ID_region("hMass", [100,180])
+    #check_low_photon_ID_region("hPhotonMinIDMVA_fine", [-0.9,1.0])
+    #check_low_photon_ID_region("hPhotonMaxIDMVA_fine", [-0.9,1.0])
     #check_low_photon_ID_region("hfake_photon_IDMVA", [-0.9,1.0])
 
     #check_fake_pdf("check_fake_pdf.png")
 
+    make_fake_photon_IDMVA("idmva", "check_fake_photon_IDMVA.png", True)
+    make_fake_photon_IDMVA("idmva", "check_fake_photon_IDMVA.pdf", True)
     #make_fake_photon_IDMVA("idmva", "check_fake_photon_IDMVA_GammaJets.png", True)
     #make_fake_photon_IDMVA("maxIDMVA_", "check_max_photon_IDMVA_GammaJets.png")
     #make_fake_photon_IDMVA("minIDMVA_", "check_min_photon_IDMVA_GammaJets.png")
