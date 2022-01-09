@@ -31,6 +31,34 @@ def update_to_my_webpage(myfigure):
 #----------------------------------------------------------------------------------------------------
 # retrieve fake photon IDMVA
 #----------------------------------------------------------------------------------------------------#
+def make_manual_fit_info():
+    latex = ROOT.TLatex()
+    latex.SetNDC()
+    latex.SetTextFont(43)
+    latex.SetTextAlign(11)
+    latex.SetTextSize(26)
+
+    f = ""
+    for i in range(8):
+        term = "p%dx^{%d}" % (i, i)
+        if len(f) == 0:
+            f = term
+        else:
+            f += " + " + term
+
+    x = 0.40
+    y = 0.80
+    decrement = 0.06
+    latex.DrawLatex(x, y + decrement / 3, "Seventh order polynomial")
+    latex.DrawLatex(x, y - decrement * 1, "p0 =  443.784 +/- 8.09362")
+    latex.DrawLatex(x, y - decrement * 2, "p1 =   -535.2 +/- 40.6104")
+    latex.DrawLatex(x, y - decrement * 3, "p2 =  1022.96 +/- 139.2")
+    latex.DrawLatex(x, y - decrement * 4, "p3 = -1072.95 +/- 333.686")
+    latex.DrawLatex(x, y - decrement * 5, "p4 = -1775.02 +/- 515.644")
+    latex.DrawLatex(x, y - decrement * 6, "p5 =  3157.69 +/- 841.705")
+    latex.DrawLatex(x, y - decrement * 7, "p6 =  3550.26 +/- 492.368")
+    latex.DrawLatex(x, y - decrement * 8, "p7 = -4563.58 +/- 655.114")
+
 def make_fake_photon_IDMVA(var, output, do_fit = False):
     filename = "rootfiles/fakePhoton_GJet.root"
     filename = "rootfiles/fakePhoton_pdf.root"
@@ -40,12 +68,14 @@ def make_fake_photon_IDMVA(var, output, do_fit = False):
     tree = f1.Get("t_fakePhotonIDMVA")
 
     hist = ROOT.TH1D("hist", ";Photon ID MVA; Entries", 40, -1, 1)
+    hist.SetStats(0)
     tree.Draw("%s >> hist" % var)
 
     hist.GetXaxis().SetRangeUser(-0.9,1.0)
     if do_fit:
         hist.Fit("pol7")
     hist.Draw("e1")
+    make_manual_fit_info()
 
     c1.SaveAs(output)
     update_to_my_webpage(output)
